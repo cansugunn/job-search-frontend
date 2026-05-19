@@ -2,13 +2,11 @@ FROM node:20-alpine AS builder
 
 WORKDIR /app
 
-ARG VITE_SUPABASE_URL
-ARG VITE_SUPABASE_ANON_KEY
-ARG VITE_API_BASE_URL
-
-ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL
-ENV VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+ENV VITE_SUPABASE_URL=https://jeuwaojbgflrcunowlea.supabase.co
+ENV VITE_SUPABASE_ANON_KEY=sb_publishable_S9QC9Bdc2nINbTdqFkvWvA_w5Pc9KAC
+ENV VITE_JOB_API_BASE_URL=https://job-search-gateway-248843403405.europe-west1.run.app/job-search/api/v1
+ENV VITE_NOTIFICATION_API_BASE_URL=https://job-search-gateway-248843403405.europe-west1.run.app/notification/api/v1
+ENV VITE_AI_API_BASE_URL=https://job-search-gateway-248843403405.europe-west1.run.app/ai/api/v1
 
 COPY package*.json ./
 RUN npm ci
