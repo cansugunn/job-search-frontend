@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { getAccessToken } from './auth';
+import { supabase, getAccessToken, setCurrentToken } from './auth';
 import type {
   Page, JobPostingResponseDto, JobDetailResponseDto,
   AlertResponseDto, NotificationResponseDto, ChatResponseDto,
@@ -19,12 +19,31 @@ const authJobApi = axios.create({ baseURL: getRequiredEnv('VITE_JOB_API_BASE_URL
 const notifApi = axios.create({ baseURL: getRequiredEnv('VITE_NOTIFICATION_API_BASE_URL') });
 const aiApi = axios.create({ baseURL: getRequiredEnv('VITE_AI_API_BASE_URL') });
 
-function attachAuth(instance: typeof authJobApi) {
+function attachAuth(instance: ReturnType<typeof axios.create>) {
+  // Attach token on every request
   instance.interceptors.request.use(config => {
     const token = getAccessToken();
     if (token) config.headers.Authorization = `Bearer ${token}`;
     return config;
   });
+
+  // On 401, refresh session once and retry
+  instance.interceptors.response.use(
+    res => res,
+    async error => {
+      const original = error.config;
+      if (error.response?.status === 401 && !original._retry) {
+        original._retry = true;
+        const { data, error: refreshError } = await supabase.auth.refreshSession();
+        if (!refreshError && data.session) {
+          setCurrentToken(data.session.access_token);
+          original.headers.Authorization = `Bearer ${data.session.access_token}`;
+          return instance(original);
+        }
+      }
+      return Promise.reject(error);
+    }
+  );
 }
 attachAuth(authJobApi);
 attachAuth(notifApi);
@@ -35,7 +54,7 @@ export const searchJobs = (params: {
   position?: string; cityId?: string; townId?: string; countryId?: string;
   workingPreference?: WorkingPreference; page?: number; size?: number;
 }) =>
-  jobApi.get<Page<JobPostingResponseDto>>('/jobs', { params }).then(r => r.data);
+  authJobApi.get<Page<JobPostingResponseDto>>('/jobs', { params }).then(r => r.data);
 
 export const getJobDetail = (id: string) =>
   jobApi.get<JobDetailResponseDto>(`/jobs/${id}`).then(r => r.data);
