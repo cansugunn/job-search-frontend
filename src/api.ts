@@ -127,17 +127,15 @@ export const createAlert = (data: {
 }) =>
   notifApi.post('/alerts', data).then(r => r.data);
 
-export const getAlerts = () =>
-  notifApi.get<Page<AlertResponseDto>>('/alerts', { params: { size: 50 } })
-    .then(r => r.data.content);
+export const getAlerts = (page = 0, size = 10) =>
+  notifApi.get<Page<AlertResponseDto>>('/alerts', { params: { page, size } }).then(r => r.data);
 
 export const deleteAlert = (id: string) =>
   notifApi.delete(`/alerts/${id}`).then(r => r.data);
 
 // Notifications
-export const getNotifications = () =>
-  notifApi.get<Page<NotificationResponseDto>>('/notifications', { params: { size: 100 } })
-    .then(r => r.data.content);
+export const getNotifications = (page = 0, size = 10) =>
+  notifApi.get<Page<NotificationResponseDto>>('/notifications', { params: { page, size } }).then(r => r.data);
 
 // AI Chat
 export const sendChatMessage = (message: string) =>

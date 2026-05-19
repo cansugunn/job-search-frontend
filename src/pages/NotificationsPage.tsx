@@ -4,26 +4,37 @@ import { getNotifications } from '../api';
 import { useAuth } from '../AuthContext';
 import type { NotificationResponseDto } from '../types';
 
-const PAGE_SIZE = 10;
-
 export default function NotificationsPage() {
   const { loggedIn } = useAuth();
   const navigate = useNavigate();
-  const [all, setAll] = useState<NotificationResponseDto[]>([]);
+
+  const [items, setItems] = useState<NotificationResponseDto[]>([]);
   const [page, setPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(0);
+  const [totalElements, setTotalElements] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
     if (!loggedIn) { navigate('/login'); return; }
-    getNotifications()
-      .then(setAll)
-      .catch(() => setError('Failed to load notifications.'))
-      .finally(() => setLoading(false));
+    loadPage(0);
   }, [loggedIn]);
 
-  const totalPages = Math.ceil(all.length / PAGE_SIZE);
-  const items = all.slice(page * PAGE_SIZE, page * PAGE_SIZE + PAGE_SIZE);
+  async function loadPage(p: number) {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await getNotifications(p);
+      setItems(data.content);
+      setPage(data.number);
+      setTotalPages(data.totalPages);
+      setTotalElements(data.totalElements);
+    } catch {
+      setError('Failed to load notifications.');
+    } finally {
+      setLoading(false);
+    }
+  }
 
   if (loading) return <div className="spinner">Loading...</div>;
 
@@ -32,13 +43,13 @@ export default function NotificationsPage() {
       <h1 className="section-title">My Notifications</h1>
       {error && <div className="alert alert-error">{error}</div>}
 
-      {all.length > 0 && (
+      {totalElements > 0 && (
         <p style={{ fontSize: '0.85rem', color: '#888', marginBottom: 16 }}>
-          {all.length} notification{all.length !== 1 ? 's' : ''}
+          {totalElements} notification{totalElements !== 1 ? 's' : ''}
         </p>
       )}
 
-      {all.length === 0 && !error ? (
+      {items.length === 0 && !error ? (
         <div className="card" style={{ textAlign: 'center', color: '#888' }}>
           No notifications yet. Create a job alert to start receiving notifications.
         </div>
@@ -68,23 +79,15 @@ export default function NotificationsPage() {
 
           {totalPages > 1 && (
             <div className="pagination">
-              <button
-                className="btn btn-secondary btn-sm"
-                disabled={page === 0}
-                onClick={() => setPage(p => p - 1)}
-              >‹ Previous</button>
+              <button className="btn btn-secondary btn-sm" disabled={page === 0}
+                onClick={() => loadPage(page - 1)}>‹ Previous</button>
               {Array.from({ length: Math.min(totalPages, 7) }, (_, i) => (
-                <button
-                  key={i}
+                <button key={i}
                   className={`btn btn-sm ${i === page ? 'btn-primary active' : 'btn-secondary'}`}
-                  onClick={() => setPage(i)}
-                >{i + 1}</button>
+                  onClick={() => loadPage(i)}>{i + 1}</button>
               ))}
-              <button
-                className="btn btn-secondary btn-sm"
-                disabled={page >= totalPages - 1}
-                onClick={() => setPage(p => p + 1)}
-              >Next ›</button>
+              <button className="btn btn-secondary btn-sm" disabled={page >= totalPages - 1}
+                onClick={() => loadPage(page + 1)}>Next ›</button>
             </div>
           )}
         </>

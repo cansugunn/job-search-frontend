@@ -10,6 +10,8 @@ export default function AlertsPage() {
   const navigate = useNavigate();
 
   const [alerts, setAlerts] = useState<AlertResponseDto[]>([]);
+  const [alertsPage, setAlertsPage] = useState(0);
+  const [alertsTotalPages, setAlertsTotalPages] = useState(0);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [msg, setMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -28,7 +30,7 @@ export default function AlertsPage() {
 
   useEffect(() => {
     if (!loggedIn) { navigate('/login'); return; }
-    loadAlerts();
+    loadAlerts(0);
     getCountries().then(setCountries).catch(() => {});
   }, [loggedIn]);
 
@@ -54,10 +56,13 @@ export default function AlertsPage() {
       .catch(() => {});
   }, [selectedCity]);
 
-  async function loadAlerts() {
+  async function loadAlerts(page: number) {
     setLoading(true);
     try {
-      setAlerts(await getAlerts());
+      const data = await getAlerts(page);
+      setAlerts(data.content);
+      setAlertsPage(data.number);
+      setAlertsTotalPages(data.totalPages);
     } catch {
       setMsg({ type: 'error', text: 'Failed to load alerts.' });
     } finally {
@@ -88,7 +93,7 @@ export default function AlertsPage() {
       });
       setMsg({ type: 'success', text: 'Alert created!' });
       resetForm();
-      await loadAlerts();
+      await loadAlerts(0);
     } catch {
       setMsg({ type: 'error', text: 'Failed to create alert.' });
     } finally {
@@ -99,7 +104,7 @@ export default function AlertsPage() {
   async function handleDelete(id: string) {
     try {
       await deleteAlert(id);
-      setAlerts(prev => prev.filter(a => a.id !== id));
+      await loadAlerts(alertsPage);
     } catch {
       setMsg({ type: 'error', text: 'Failed to delete alert.' });
     }
@@ -207,23 +212,39 @@ export default function AlertsPage() {
           You have not created any alerts yet.
         </div>
       ) : (
-        alerts.map(alert => (
-          <div key={alert.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <div>
-              <strong>{alert.position}</strong>
-              {alert.country && <span style={{ marginLeft: 8, color: '#666', fontSize: '0.9rem' }}>🌍 {alert.country}</span>}
-              {alert.city && <span style={{ marginLeft: 8, color: '#666', fontSize: '0.9rem' }}>📍 {alert.city}</span>}
-              {alert.town && <span style={{ marginLeft: 8, color: '#666', fontSize: '0.9rem' }}>🏘 {alert.town}</span>}
-              <div style={{ marginTop: 6 }}>
-                <WorkingPreferenceBadge value={alert.workingPreference} />
-                <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#999' }}>
-                  {new Date(alert.createdAt).toLocaleDateString('en-US')}
-                </span>
+        <>
+          {alerts.map(alert => (
+            <div key={alert.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <strong>{alert.position}</strong>
+                {alert.country && <span style={{ marginLeft: 8, color: '#666', fontSize: '0.9rem' }}>🌍 {alert.country}</span>}
+                {alert.city && <span style={{ marginLeft: 8, color: '#666', fontSize: '0.9rem' }}>📍 {alert.city}</span>}
+                {alert.town && <span style={{ marginLeft: 8, color: '#666', fontSize: '0.9rem' }}>🏘 {alert.town}</span>}
+                <div style={{ marginTop: 6 }}>
+                  <WorkingPreferenceBadge value={alert.workingPreference} />
+                  <span style={{ marginLeft: 8, fontSize: '0.8rem', color: '#999' }}>
+                    {new Date(alert.createdAt).toLocaleDateString('en-US')}
+                  </span>
+                </div>
               </div>
+              <button className="btn btn-danger btn-sm" onClick={() => handleDelete(alert.id)}>Delete</button>
             </div>
-            <button className="btn btn-danger btn-sm" onClick={() => handleDelete(alert.id)}>Delete</button>
-          </div>
-        ))
+          ))}
+
+          {alertsTotalPages > 1 && (
+            <div className="pagination">
+              <button className="btn btn-secondary btn-sm" disabled={alertsPage === 0}
+                onClick={() => loadAlerts(alertsPage - 1)}>‹ Previous</button>
+              {Array.from({ length: alertsTotalPages }, (_, i) => (
+                <button key={i}
+                  className={`btn btn-sm ${i === alertsPage ? 'btn-primary active' : 'btn-secondary'}`}
+                  onClick={() => loadAlerts(i)}>{i + 1}</button>
+              ))}
+              <button className="btn btn-secondary btn-sm" disabled={alertsPage >= alertsTotalPages - 1}
+                onClick={() => loadAlerts(alertsPage + 1)}>Next ›</button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
