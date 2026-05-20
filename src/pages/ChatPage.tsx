@@ -15,28 +15,32 @@ interface Message {
   jobs?: JobMention[];
 }
 
-// Extract job IDs + titles mentioned in AI reply
-// Looks for patterns like "ID: uuid" or "id: uuid" or UUID bare in context of "apply"
+// Extract job IDs + titles from AI reply.
+// The AI consistently formats listings as: **Job Title** – City – Company\n- Job ID: uuid
+// We find each UUID, then pick the LAST **bold** segment before it (nearest title).
 function extractJobs(text: string): JobMention[] {
   const jobs: JobMention[] = [];
   const seen = new Set<string>();
 
-  // Pattern: job id: <uuid> or jobId: <uuid>
   const idPattern = /(?:job\s*id|jobId|id)[:\s]+([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/gi;
   let match;
   while ((match = idPattern.exec(text)) !== null) {
     const id = match[1];
-    if (!seen.has(id)) {
-      seen.add(id);
-      // Try to find a title near this match (look back ~200 chars)
-      const before = text.slice(Math.max(0, match.index - 200), match.index);
-      const titleMatch = before.match(/(?:[-*•]\s*|\*\*|#+\s*)([A-ZÇĞİÖŞÜa-zçğışöşü][^\n]{3,60}?)(?:\s*[-–—]|\s*\*\*|$)/m);
-      const title = titleMatch ? titleMatch[1].trim() : `Job #${jobs.length + 1}`;
-      jobs.push({ id, title });
-    }
+    if (seen.has(id)) continue;
+    seen.add(id);
+
+    // Look back up to 400 chars and take the LAST **bold** — avoids picking up
+    // list items like "- Working preference: REMOTE" that come before the UUID.
+    const before = text.slice(Math.max(0, match.index - 400), match.index);
+    const boldMatches = [...before.matchAll(/\*\*([^*\n]{3,80}?)\*\*/g)];
+    const title = boldMatches.length > 0
+      ? boldMatches[boldMatches.length - 1][1].trim()
+      : `Job #${jobs.length + 1}`;
+
+    jobs.push({ id, title });
   }
 
-  // Fallback: any bare UUID
+  // Fallback: bare UUIDs with no "Job ID:" prefix
   if (jobs.length === 0) {
     const uuidPattern = /\b([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\b/gi;
     while ((match = uuidPattern.exec(text)) !== null) {
