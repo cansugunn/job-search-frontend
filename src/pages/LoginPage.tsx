@@ -1,19 +1,32 @@
-import { useState, type FormEvent } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, type FormEvent } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
+
+interface LoginLocationState {
+  from?: string;
+}
+
+function getRedirectPath(state: unknown): string {
+  const from = (state as LoginLocationState | null)?.from;
+  if (typeof from === 'string' && from.startsWith('/') && !from.startsWith('//')) {
+    return from;
+  }
+  return '/';
+}
 
 export default function LoginPage() {
   const { login, loggedIn } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = getRedirectPath(location.state);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  if (loggedIn) {
-    navigate('/');
-    return null;
-  }
+  useEffect(() => {
+    if (loggedIn) navigate(redirectTo, { replace: true });
+  }, [loggedIn, navigate, redirectTo]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -21,13 +34,15 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate(redirectTo, { replace: true });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Sign in failed');
     } finally {
       setLoading(false);
     }
   }
+
+  if (loggedIn) return null;
 
   return (
     <div style={{ maxWidth: 400, margin: '60px auto' }}>

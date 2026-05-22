@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { getJobDetail, applyToJob, checkApplied } from '../api';
 import { useAuth } from '../AuthContext';
 import WorkingPreferenceBadge from '../components/WorkingPreferenceBadge';
@@ -8,23 +8,23 @@ import type { JobDetailResponseDto } from '../types';
 export default function JobDetailPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const { loggedIn } = useAuth();
 
-  const [job, setJob] = useState<JobDetailResponseDto | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [jobResult, setJobResult] = useState<{ id: string; job: JobDetailResponseDto | null } | null>(null);
   const [applying, setApplying] = useState(false);
-  const [applied, setApplied] = useState(false);
+  const [appliedByJobId, setAppliedByJobId] = useState<Record<string, boolean>>({});
   const [applyMsg, setApplyMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
     getJobDetail(id)
-      .then(setJob)
-      .catch(() => setJob(null))
-      .finally(() => setLoading(false));
+      .then(job => setJobResult({ id, job }))
+      .catch(() => setJobResult({ id, job: null }));
     if (loggedIn) {
-      checkApplied(id).then(setApplied).catch(() => {});
+      checkApplied(id)
+        .then(applied => setAppliedByJobId(prev => ({ ...prev, [id]: applied })))
+        .catch(() => {});
     }
   }, [id, loggedIn]);
 
@@ -34,11 +34,14 @@ export default function JobDetailPage() {
     setApplyMsg(null);
     try {
       await applyToJob(id);
-      setApplied(true);
+      setAppliedByJobId(prev => ({ ...prev, [id]: true }));
       setApplyMsg({ type: 'success', text: 'Your application was submitted successfully!' });
-      setJob(prev => prev ? {
+      setJobResult(prev => prev?.job ? {
         ...prev,
-        posting: { ...prev.posting, applicationCount: prev.posting.applicationCount + 1 }
+        job: {
+          ...prev.job,
+          posting: { ...prev.job.posting, applicationCount: prev.job.posting.applicationCount + 1 },
+        },
       } : prev);
     } catch (err: unknown) {
       const msg = String(err);
@@ -51,6 +54,10 @@ export default function JobDetailPage() {
       setApplying(false);
     }
   }
+
+  const loading = !!id && jobResult?.id !== id;
+  const job = jobResult && jobResult.id === id ? jobResult.job : null;
+  const applied = id ? appliedByJobId[id] ?? false : false;
 
   if (loading) return <div className="spinner">Loading...</div>;
   if (!job) return <div className="alert alert-error">Listing not found.</div>;
@@ -99,7 +106,13 @@ export default function JobDetailPage() {
                 <p style={{ fontSize: '0.85rem', color: '#666', marginBottom: 12 }}>
                   You need to sign in to apply.
                 </p>
-                <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => navigate('/login')}>
+                <button
+                  className="btn btn-primary"
+                  style={{ width: '100%' }}
+                  onClick={() => navigate('/login', {
+                    state: { from: `${location.pathname}${location.search}${location.hash}` },
+                  })}
+                >
                   Sign In
                 </button>
               </>

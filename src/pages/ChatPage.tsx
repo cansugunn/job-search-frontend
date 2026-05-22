@@ -143,7 +143,6 @@ export default function ChatPage() {
     try {
       await applyToJob(jobId);
       setApplyStatus(prev => ({ ...prev, [jobId]: 'done' }));
-      setMessages(prev => [...prev, { role: 'ai', text: `✅ Application submitted! View listing at: /jobs/${jobId}` }]);
     } catch {
       setApplyStatus(prev => ({ ...prev, [jobId]: 'error' }));
     }
