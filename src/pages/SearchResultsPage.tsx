@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, type FormEvent } from 'react';
+import { useState, useEffect, useRef, useCallback, type FormEvent } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import { searchJobs, getCountries, getCities, getTowns } from '../api';
 import JobCard from '../components/JobCard';
@@ -27,6 +27,7 @@ export default function SearchResultsPage() {
   const [countries, setCountries] = useState<Option[]>([]);
   const [cities, setCities] = useState<Option[]>([]);
   const [towns, setTowns] = useState<Option[]>([]);
+  const [optionNames, setOptionNames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -41,10 +42,30 @@ export default function SearchResultsPage() {
   // Used to set cityId after country's cities have loaded (during text resolution)
   const pendingCityIdRef = useRef<string | null>(null);
 
+  const rememberOptionNames = useCallback((options: Option[]) => {
+    setOptionNames(prev => {
+      let changed = false;
+      const next = { ...prev };
+      for (const option of options) {
+        if (next[option.id] !== option.name) {
+          next[option.id] = option.name;
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, []);
+
   // Load countries once
   useEffect(() => {
-    getCountries().then(list => setCountries(list as Option[])).catch(() => {});
-  }, []);
+    getCountries()
+      .then(list => {
+        const options = list as Option[];
+        setCountries(options);
+        rememberOptionNames(options);
+      })
+      .catch(() => {});
+  }, [rememberOptionNames]);
 
   // One-time: if ?city=text arrived from home page, resolve it to precise countryId/cityId
   useEffect(() => {
@@ -56,6 +77,10 @@ export default function SearchResultsPage() {
         if (results.length) {
           const found = results[0];
           pendingCityIdRef.current = found.id;
+          rememberOptionNames([
+            { id: found.country.id, name: found.country.name },
+            { id: found.id, name: found.name },
+          ]);
           setCountryId(found.country.id);
           const next = Object.fromEntries(searchParams.entries());
           delete next.city;
@@ -79,7 +104,9 @@ export default function SearchResultsPage() {
     }
     getCities({ countryId })
       .then(list => {
-        setCities(list.map(c => ({ id: c.id, name: c.name })));
+        const options = list.map(c => ({ id: c.id, name: c.name }));
+        setCities(options);
+        rememberOptionNames(options);
         if (pendingCityIdRef.current) {
           setCityId(pendingCityIdRef.current);
           pendingCityIdRef.current = null;
@@ -88,7 +115,7 @@ export default function SearchResultsPage() {
       .catch(() => setCities([]));
     if (countryInitRef.current) { setCityId(''); setTowns([]); setTownId(''); }
     countryInitRef.current = true;
-  }, [countryId]);
+  }, [countryId, rememberOptionNames]);
 
   // Cascade: city → towns
   useEffect(() => {
@@ -99,11 +126,15 @@ export default function SearchResultsPage() {
       return;
     }
     getTowns({ cityId })
-      .then(list => setTowns(list.map(t => ({ id: t.id, name: t.name }))))
+      .then(list => {
+        const options = list.map(t => ({ id: t.id, name: t.name }));
+        setTowns(options);
+        rememberOptionNames(options);
+      })
       .catch(() => setTowns([]));
     if (cityInitRef.current) setTownId('');
     cityInitRef.current = true;
-  }, [cityId]);
+  }, [cityId, rememberOptionNames]);
 
   // Search whenever URL params change (but only after resolution is done)
   useEffect(() => {
@@ -163,16 +194,16 @@ export default function SearchResultsPage() {
   if (searchParams.get('position'))
     activeFilters.push({ key: 'position', label: `Position: ${searchParams.get('position')}` });
   if (searchParams.get('townId')) {
-    const name = towns.find(t => t.id === searchParams.get('townId'))?.name ?? searchParams.get('townId');
-    activeFilters.push({ key: 'townId', label: `Town: ${name}` });
+    const name = optionNames[searchParams.get('townId')!];
+    if (name) activeFilters.push({ key: 'townId', label: `Town: ${name}` });
   }
   if (searchParams.get('cityId')) {
-    const name = cities.find(c => c.id === searchParams.get('cityId'))?.name ?? searchParams.get('cityId');
-    activeFilters.push({ key: 'cityId', label: `City: ${name}` });
+    const name = optionNames[searchParams.get('cityId')!];
+    if (name) activeFilters.push({ key: 'cityId', label: `City: ${name}` });
   }
   if (searchParams.get('countryId')) {
-    const name = countries.find(c => c.id === searchParams.get('countryId'))?.name ?? searchParams.get('countryId');
-    activeFilters.push({ key: 'countryId', label: `Country: ${name}` });
+    const name = optionNames[searchParams.get('countryId')!];
+    if (name) activeFilters.push({ key: 'countryId', label: `Country: ${name}` });
   }
   if (searchParams.get('workingPreference'))
     activeFilters.push({
