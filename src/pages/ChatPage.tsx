@@ -15,6 +15,40 @@ interface Message {
   jobs?: JobMention[];
 }
 
+const CHAT_CONVERSATION_ID_STORAGE_KEY = 'jobSearchChatConversationId';
+
+function createConversationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function getInitialConversationId(): string {
+  if (typeof window === 'undefined') return createConversationId();
+
+  try {
+    const stored = window.sessionStorage.getItem(CHAT_CONVERSATION_ID_STORAGE_KEY);
+    if (stored) return stored;
+
+    const conversationId = createConversationId();
+    window.sessionStorage.setItem(CHAT_CONVERSATION_ID_STORAGE_KEY, conversationId);
+    return conversationId;
+  } catch {
+    return createConversationId();
+  }
+}
+
+function storeConversationId(conversationId: string) {
+  if (typeof window === 'undefined') return;
+
+  try {
+    window.sessionStorage.setItem(CHAT_CONVERSATION_ID_STORAGE_KEY, conversationId);
+  } catch {
+    // Ignore storage failures; in-memory state still keeps this chat coherent.
+  }
+}
+
 // Extract job IDs + titles from AI reply.
 // The AI consistently formats listings as: **Job Title** – City – Company\n- Job ID: uuid
 // We find each UUID, then pick the LAST **bold** segment before it (nearest title).
@@ -73,12 +107,13 @@ export default function ChatPage() {
   ]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [conversationId, setConversationId] = useState(getInitialConversationId);
   const [applyStatus, setApplyStatus] = useState<Record<string, 'loading' | 'done' | 'error'>>({});
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!loggedIn) navigate('/login');
-  }, [loggedIn]);
+  }, [loggedIn, navigate]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -91,7 +126,9 @@ export default function ChatPage() {
     setInput('');
     setLoading(true);
     try {
-      const res = await sendChatMessage(userText);
+      const res = await sendChatMessage(userText, conversationId);
+      setConversationId(res.conversationId);
+      storeConversationId(res.conversationId);
       const jobs = extractJobs(res.reply);
       setMessages(prev => [...prev, { role: 'ai', text: res.reply, jobs }]);
     } catch {

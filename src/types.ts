@@ -87,6 +87,7 @@ export interface NotificationResponseDto {
 
 export interface ChatResponseDto {
   reply: string;
+  conversationId: string;
 }
 
 export type AutocompleteResponse = string[];

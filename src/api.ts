@@ -138,5 +138,5 @@ export const getNotifications = (page = 0, size = 10) =>
   notifApi.get<Page<NotificationResponseDto>>('/notifications', { params: { page, size } }).then(r => r.data);
 
 // AI Chat
-export const sendChatMessage = (message: string) =>
-  aiApi.post<ChatResponseDto>('/chats', { message }).then(r => r.data);
+export const sendChatMessage = (message: string, conversationId?: string) =>
+  aiApi.post<ChatResponseDto>('/chats', { message, conversationId }).then(r => r.data);
